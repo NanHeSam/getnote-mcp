@@ -122,13 +122,13 @@ const TOOLS: Tool[] = [
   {
     name: "list_notes",
     description:
-      "获取笔记列表（每次固定返回 20 条）。首次请求 since_id 传 0，后续用上一页最后一条笔记的 ID。",
+      "获取笔记列表（每次固定返回 20 条，服务端不支持 limit 参数）。用游标翻页：首次请求不传 cursor；后续把上一次响应返回的 cursor 字段原样传入，直到 has_more 为 false。响应里的 total 是全库笔记总数，不是本页条数。",
     inputSchema: {
       type: "object" as const,
       properties: {
-        since_id: {
+        cursor: {
           type: "string",
-          description: "翻页游标。首次不传（或传 \"0\"），后续将上一次响应的 cursor 字段直接传入即可，无需任何转换",
+          description: "翻页游标。首次不传；后续将上一次响应的 cursor 字段原样传入即可，无需任何转换。",
         },
       },
       required: [],
@@ -679,8 +679,8 @@ async function handleTool(
   switch (name) {
     // ── Notes ──
     case "list_notes": {
-      const since_id = (input.since_id as string | undefined);
-      return client.listNotes({ cursor: since_id === "0" ? undefined : since_id });
+      const cursor = (input.cursor as string | undefined);
+      return client.listNotes({ cursor: cursor === "0" ? undefined : cursor });
     }
     case "get_note": {
       return client.getNote(input.id as number | string, input.image_quality as string | undefined);
