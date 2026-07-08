@@ -521,7 +521,6 @@ export interface DeleteNoteTagResp {
 export interface GetUploadConfigResp {
   support_extensions: string[];
   max_size_bytes: number;
-  max_count: number;
 }
 
 // OSS 上传凭证（与 Web 端格式一致）
@@ -578,7 +577,7 @@ export interface TopicNoteItem {
   content: string;
   note_type: string;
   tags: string[];
-  is_ai?: boolean;
+  is_ai_generated?: boolean;
   created_at: string;
   edit_time: string;
 }
