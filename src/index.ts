@@ -115,6 +115,18 @@ function getClientId(): string {
   process.exit(1);
 }
 
+function snowflakeID(value: unknown, field: string): string | number {
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return value;
+  }
+  throw new Error(
+    `${field} must be a decimal string; only legacy integers within JavaScript's safe range are accepted`
+  );
+}
+
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 
 const TOOLS: Tool[] = [
@@ -141,8 +153,8 @@ const TOOLS: Tool[] = [
       type: "object" as const,
       properties: {
         id: {
-          type: ["number", "string"],
-          description: "笔记 ID",
+          type: ["string", "number"],
+          description: "笔记 ID。必须优先传十进制字符串；仅为兼容旧调用接受 JavaScript 安全整数",
         },
         image_quality: {
           type: "string",
@@ -180,8 +192,16 @@ const TOOLS: Tool[] = [
           description: "标签列表（最多 5 个，每个不超过 10 个汉字）",
         },
         parent_id: {
-          type: ["number", "string"],
-          description: "父笔记 ID（创建子笔记时填，父笔记的 is_child_note 必须为 false）",
+          type: ["string", "number"],
+          description: "父笔记 ID（优先传十进制字符串；创建子笔记时填，父笔记的 is_child_note 必须为 false）",
+        },
+        topic_id: {
+          type: "string",
+          description: "目标知识库 ID（来自 list_topics 的 topic_id；支持 DEFAULT、BOOKSPACE、CUSTOMER）",
+        },
+        client_request_id: {
+          type: "string",
+          description: "可选幂等键（1-128 个 ASCII 字符）。重试同一创建请求时必须复用同一个值",
         },
         link_url: {
           type: "string",
@@ -218,8 +238,8 @@ const TOOLS: Tool[] = [
       type: "object" as const,
       properties: {
         note_id: {
-          type: ["number", "string"],
-          description: "笔记 ID",
+          type: ["string", "number"],
+          description: "笔记 ID。必须优先传十进制字符串；仅兼容 JavaScript 安全整数",
         },
       },
       required: ["note_id"],
@@ -233,8 +253,8 @@ const TOOLS: Tool[] = [
       type: "object" as const,
       properties: {
         note_id: {
-          type: ["number", "string"],
-          description: "笔记 ID（必填）",
+          type: ["string", "number"],
+          description: "笔记 ID（必填，优先传十进制字符串）",
         },
         title: {
           type: "string",
@@ -262,8 +282,8 @@ const TOOLS: Tool[] = [
       type: "object" as const,
       properties: {
         note_id: {
-          type: ["number", "string"],
-          description: "笔记 ID",
+          type: ["string", "number"],
+          description: "笔记 ID（优先传十进制字符串）",
         },
         tags: {
           type: "array",
@@ -281,8 +301,8 @@ const TOOLS: Tool[] = [
       type: "object" as const,
       properties: {
         note_id: {
-          type: ["number", "string"],
-          description: "笔记 ID",
+          type: ["string", "number"],
+          description: "笔记 ID（优先传十进制字符串）",
         },
         tag_id: {
           type: "string",
@@ -296,7 +316,7 @@ const TOOLS: Tool[] = [
   // ── Knowledge / Topics ──
   {
     name: "list_topics",
-    description: "获取知识库列表（每页固定 20 条）。返回 topics[]、has_more、total。每个 topic 包含 topic_id（知识库 ID，后续所有接口的 topic_id 参数均传此值）、name、description、cover、stats（笔记数、文件数、博主数、直播数）等。",
+    description: "获取用户自己创建或拥有的知识库列表（每页固定 20 条），包含普通知识库（DEFAULT）、客户档案（CUSTOMER）和书籍知识库（BOOKSPACE）。返回 topics[]、has_more、total；保存笔记前可先按 name/scope 选择目标 topic_id。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -479,8 +499,8 @@ const TOOLS: Tool[] = [
           description: "知识库 ID（来自 list_topics 的 topic_id 字段）",
         },
         follow_id: {
-          type: "number",
-          description: "博主订阅 ID（来自 list_topic_bloggers 的 follow_id 字段）",
+          type: ["string", "number"],
+          description: "博主订阅 ID（优先使用 list_topic_bloggers 返回的 follow_id_str；兼容安全整数 follow_id）",
         },
         page: {
           type: "number",
@@ -542,8 +562,8 @@ const TOOLS: Tool[] = [
           description: "知识库 ID（来自 list_topics 的 topic_id 字段）",
         },
         live_id: {
-          type: "number",
-          description: "直播 ID（来自 list_topic_lives 的 live_id 字段）",
+          type: ["string", "number"],
+          description: "直播 ID（来自 list_topic_lives 的 live_id，优先按字符串原样传入）",
         },
       },
       required: ["topic_id", "live_id"],
@@ -553,7 +573,7 @@ const TOOLS: Tool[] = [
   {
     name: "follow_topic_live",
     description:
-      "订阅一个得到 App 直播到知识库。直播结束后经 AI 处理即可通过 list_topic_lives 查看。目前仅支持得到 App 直播链接。需要 topic.live.read scope。",
+      "订阅一个得到 App 直播到知识库。直播结束后经 AI 处理即可通过 list_topic_lives 查看。目前仅支持得到 App 直播链接。需要 topic.live.write scope。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -574,7 +594,7 @@ const TOOLS: Tool[] = [
   {
     name: "share_note",
     description:
-      "生成笔记的公开分享链接。幂等接口，多次调用返回同一个 share_url。需要 note.content.read scope。",
+      "生成笔记的公开分享链接。幂等接口，多次调用返回同一个 share_url。需要 note.sharing.write scope。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -683,7 +703,7 @@ async function handleTool(
       return client.listNotes({ cursor: cursor === "0" ? undefined : cursor });
     }
     case "get_note": {
-      return client.getNote(input.id as number | string, input.image_quality as string | undefined);
+      return client.getNote(snowflakeID(input.id, "id"), input.image_quality as string | undefined);
     }
     case "save_note": {
       const body: SaveNoteReq = {};
@@ -693,18 +713,21 @@ async function handleTool(
         body.note_type = input.note_type as SaveNoteReq["note_type"];
       if (input.tags !== undefined) body.tags = input.tags as string[];
       if (input.parent_id !== undefined)
-        body.parent_id = input.parent_id as number | string;
+        body.parent_id = snowflakeID(input.parent_id, "parent_id");
+      if (input.topic_id !== undefined) body.topic_id = input.topic_id as string;
+      if (input.client_request_id !== undefined)
+        body.client_request_id = input.client_request_id as string;
       if (input.link_url !== undefined) body.link_url = input.link_url as string;
       if (input.image_urls !== undefined)
         body.image_urls = input.image_urls as string[];
       return client.saveNote(body);
     }
     case "delete_note": {
-      return client.deleteNote(input.note_id as number | string);
+      return client.deleteNote(snowflakeID(input.note_id, "note_id"));
     }
     case "update_note": {
       const body: { note_id: number | string; title?: string; content?: string; tags?: string[] } = {
-        note_id: input.note_id as number | string,
+        note_id: snowflakeID(input.note_id, "note_id"),
       };
       if (input.title !== undefined) body.title = input.title as string;
       if (input.content !== undefined) body.content = input.content as string;
@@ -718,13 +741,13 @@ async function handleTool(
     // ── Tags ──
     case "add_note_tags": {
       return client.addNoteTags(
-        input.note_id as number | string,
+        snowflakeID(input.note_id, "note_id"),
         input.tags as string[]
       );
     }
     case "delete_note_tag": {
       return client.deleteNoteTag(
-        input.note_id as number | string,
+        snowflakeID(input.note_id, "note_id"),
         input.tag_id as string
       );
     }
@@ -751,13 +774,13 @@ async function handleTool(
     case "batch_add_notes_to_topic": {
       return client.batchAddNotesToTopic({
         topic_id: input.topic_id as string,
-        note_ids: (input.note_ids as (number | string)[]).map(String),
+        note_ids: (input.note_ids as unknown[]).map((id) => String(snowflakeID(id, "note_ids[]"))),
       });
     }
     case "remove_note_from_topic": {
       return client.removeNoteFromTopic({
         topic_id: input.topic_id as string,
-        note_ids: (input.note_ids as (number | string)[]).map(String),
+        note_ids: (input.note_ids as unknown[]).map((id) => String(snowflakeID(id, "note_ids[]"))),
       });
     }
 
@@ -806,7 +829,7 @@ async function handleTool(
     case "list_topic_blogger_contents": {
       return client.listTopicBloggerContents({
         topic_id: input.topic_id as string,
-        follow_id: input.follow_id as number | string,
+        follow_id: snowflakeID(input.follow_id, "follow_id"),
         page: input.page as number | undefined,
       });
     }
@@ -827,7 +850,7 @@ async function handleTool(
     case "get_live_detail": {
       return client.getLiveDetail({
         topic_id: input.topic_id as string,
-        live_id: input.live_id as number | string,
+        live_id: snowflakeID(input.live_id, "live_id"),
       });
     }
 
@@ -925,6 +948,10 @@ async function main() {
           reason: err.reason,
           message: err.message,
           request_id: err.requestId,
+          retryable: err.retryable,
+          field: err.field,
+          constraint: err.constraint,
+          expected_type: err.expectedType,
         };
         if (err.code === 10201) {
           errPayload.membership_url = "https://www.biji.com/checkout?product_alias=9Ab36BB3ZD&spm=wangye";
