@@ -16,6 +16,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { GetNoteClient, GetNoteAPIError, SaveNoteReq, UpdateNoteReq } from "./client.js";
+import { OPENAPI_MEMBERSHIP_PURCHASE_URL } from "./membership.js";
 import { readFileSync, realpathSync } from "node:fs";
 import { join, resolve, isAbsolute, sep } from "node:path";
 
@@ -954,7 +955,7 @@ async function main() {
           expected_type: err.expectedType,
         };
         if (err.code === 10201) {
-          errPayload.membership_url = "https://www.biji.com/checkout?product_alias=9Ab36BB3ZD&spm=wangye";
+          errPayload.membership_url = OPENAPI_MEMBERSHIP_PURCHASE_URL;
         }
         return {
           content: [

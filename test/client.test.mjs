@@ -7,6 +7,14 @@ import {
   GetNoteClient,
   parseJsonPreservingLargeIntegerStrings,
 } from "../dist/client.js";
+import { OPENAPI_MEMBERSHIP_PURCHASE_URL } from "../dist/membership.js";
+
+test("membership errors use the MCP-specific OpenAPI purchase channel", () => {
+  assert.equal(
+    OPENAPI_MEMBERSHIP_PURCHASE_URL,
+    "https://www.biji.com/checkout?product_alias=9Ab36BB3ZD&spm=openapi_mcp"
+  );
+});
 
 test("large snowflake IDs are parsed and re-encoded as strings", () => {
   const parsed = parseJsonPreservingLargeIntegerStrings(`{

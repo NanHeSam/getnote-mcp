@@ -7,6 +7,8 @@ MCP (Model Context Protocol) server for [得到大脑（Get笔记）](https://bi
 得到大脑（Get笔记）是一款个人笔记管理工具。通过此 MCP Server，AI 模型可以帮助用户管理笔记。
 
 > 🔑 **获取 API Key**：https://www.biji.com/openapi
+>
+> 💡 **开通会员**：[前往得到大脑会员购买页](https://www.biji.com/checkout?product_alias=9Ab36BB3ZD&spm=openapi_mcp)
 
 ## 使用场景
 
