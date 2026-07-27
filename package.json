@@ -1,6 +1,6 @@
 {
   "name": "@getnote/mcp",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "MCP server for 得到大脑（Get笔记） — manage notes and knowledge bases from AI assistants",
   "main": "dist/index.js",
   "bin": {
@@ -10,7 +10,8 @@
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "keywords": [
     "mcp",

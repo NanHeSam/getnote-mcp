@@ -1,6 +1,13 @@
 import axios, { AxiosInstance, AxiosError } from "axios";
 
-const BASE_URL = "https://openapi.biji.com/open/api/v1";
+const DEFAULT_BASE_URL = "https://openapi.biji.com/open/api/v1";
+
+function normalizeBaseURL(value?: string): string {
+  const base = (value || DEFAULT_BASE_URL).replace(/\/+$/, "");
+  if (base.endsWith("/open/api/v1")) return base;
+  if (base.endsWith("/open")) return `${base}/api/v1`;
+  return `${base}/open/api/v1`;
+}
 
 /**
  * Preserves long-integer ID fields as JSON strings before JSON.parse, so JS
@@ -12,11 +19,14 @@ const BASE_URL = "https://openapi.biji.com/open/api/v1";
  * Matches only when the captured field value has 16+ digits, so short IDs
  * remain numbers.
  */
-function parseJsonPreservingLargeIntegerStrings(data: unknown) {
+export function parseJsonPreservingLargeIntegerStrings(data: unknown) {
   if (typeof data !== "string" || data.trim() === "") return data;
   const safe = data.replace(
-    /"(note_id|next_cursor|cursor|id|parent_id|topic_id|since_id|share_id)"\s*:\s*(\d{16,})/g,
+    /"(note_id|next_cursor|cursor|id|parent_id|topic_id|since_id|share_id|follow_id|live_id)"\s*:\s*(\d{16,})/g,
     '"$1":"$2"'
+  ).replace(
+    /([:[,]\s*)(-?\d{16,})(?=\s*[,}\]])/g,
+    '$1"$2"'
   );
   return JSON.parse(safe);
 }
@@ -26,7 +36,11 @@ export class GetNoteAPIError extends Error {
     public readonly code: number,
     public readonly reason: string,
     message: string,
-    public readonly requestId?: string
+    public readonly requestId?: string,
+    public readonly retryable: boolean = false,
+    public readonly field?: string,
+    public readonly constraint?: string,
+    public readonly expectedType?: string
   ) {
     super(message);
     this.name = "GetNoteAPIError";
@@ -36,9 +50,9 @@ export class GetNoteAPIError extends Error {
 export class GetNoteClient {
   private http: AxiosInstance;
 
-  constructor(apiKey: string, clientId: string) {
+  constructor(apiKey: string, clientId: string, baseURL?: string) {
     this.http = axios.create({
-      baseURL: BASE_URL,
+      baseURL: normalizeBaseURL(baseURL || process.env.GETNOTE_API_URL),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "X-Client-ID": clientId,
@@ -66,7 +80,7 @@ export class GetNoteClient {
       const res = await this.http.request<{
         success: boolean;
         data: T;
-        error?: { code: number; message: string; reason: string };
+        error?: APIErrorBody;
         request_id?: string;
       }>({
         method,
@@ -82,7 +96,11 @@ export class GetNoteClient {
           err?.code ?? -1,
           err?.reason ?? "unknown",
           err?.message ?? "API request failed",
-          body.request_id
+          body.request_id,
+          err?.retryable ?? false,
+          err?.field,
+          err?.constraint,
+          err?.expected_type
         );
       }
 
@@ -93,7 +111,7 @@ export class GetNoteClient {
       if (axios.isAxiosError(err) && err.response) {
         const body = err.response.data as {
           success?: boolean;
-          error?: { code: number; message: string; reason: string };
+          error?: APIErrorBody;
           request_id?: string;
         };
         if (body?.error) {
@@ -101,7 +119,11 @@ export class GetNoteClient {
             body.error.code,
             body.error.reason,
             body.error.message,
-            body.request_id
+            body.request_id,
+            body.error.retryable ?? false,
+            body.error.field,
+            body.error.constraint,
+            body.error.expected_type
           );
         }
         throw new Error(`HTTP ${err.response.status}: ${err.message}`);
@@ -119,7 +141,7 @@ export class GetNoteClient {
     });
   }
 
-  async getNote(id: number | string, image_quality?: string) {
+  async getNote(id: string | number, image_quality?: string) {
     return this.request<GetNoteResp>("GET", "/resource/note/detail", { id, image_quality });
   }
 
@@ -198,29 +220,29 @@ export class GetNoteClient {
     const FormData = (await import("form-data")).default;
     const form = new FormData();
     
+    form.append("key", token.object_key);
     form.append("OSSAccessKeyId", token.accessid);
     form.append("policy", token.policy);
-    form.append("Signature", token.signature);
-    form.append("key", token.object_key);
+    form.append("signature", token.signature);
     form.append("callback", token.callback);
-    form.append("success_action_status", "200");
+    form.append("Content-Type", token.oss_content_type);
     form.append("file", imageData, {
       filename: "image",
       contentType: token.oss_content_type,
     });
 
-    const response = await fetch(token.host, {
-      method: "POST",
-      body: form as unknown as BodyInit,
+    const response = await axios.post(token.host, form, {
       headers: form.getHeaders(),
+      maxBodyLength: Infinity,
+      validateStatus: () => true,
     });
 
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       throw new Error(`OSS upload failed: ${response.status}`);
     }
 
     // 解析回调响应: {"h":{"c":0},"c":{"image":{"id":"xxx"}}}
-    const result = await response.json() as { h: { c: number }; c: { image: { id: string } } };
+    const result = response.data as { h: { c: number }; c: { image: { id: string } } };
     if (result.h?.c !== 0) {
       throw new Error("OSS callback failed");
     }
@@ -454,12 +476,13 @@ export interface GetNoteResp {
 }
 
 export interface SaveNoteReq {
-  id?: number | string;
   title?: string;
   content?: string;
   note_type?: "plain_text" | "link" | "img_text";
   tags?: string[];
-  parent_id?: number | string;
+  topic_id?: string;
+  parent_id?: string | number;
+  client_request_id?: string;
   link_url?: string;
   image_urls?: string[];
 }
@@ -472,11 +495,15 @@ export interface NoteTaskItem {
 }
 
 export interface SaveNoteResp {
-  id: string;
-  title: string;
-  created_at: string;
-  updated_at: string;
+  /** Legacy numeric field; transformed to a string when it exceeds JS safe range. */
+  id?: string | number;
+  /** Canonical lossless note ID. */
+  note_id?: string;
+  title?: string;
+  created_at?: string;
+  updated_at?: string;
   message?: string;
+  result?: "created" | "accepted";
   /** 链接笔记创建时返回的任务列表 */
   tasks?: NoteTaskItem[];
   /** 成功创建的笔记数量 */
@@ -485,6 +512,8 @@ export interface SaveNoteResp {
   duplicate_count?: number;
   /** 无效的链接数量 */
   invalid_count?: number;
+  duplicate_urls?: string[];
+  invalid_urls?: string[];
 }
 
 export interface NoteTaskProgress {
@@ -620,7 +649,8 @@ export interface GetQuotaResp {
 // ─── Blogger Types ───────────────────────────────────────────────────────────
 
 export interface BloggerItem {
-  follow_id: number;
+  follow_id: string | number;
+  follow_id_str?: string;
   account_name: string;
   account_avatar: string;
   notes_count: number;
@@ -663,8 +693,9 @@ export interface BloggerContentDetail extends BloggerContentItem {
 // ─── Live Types ──────────────────────────────────────────────────────────────
 
 export interface LiveItem {
-  live_id: string | number; // API may return string or number
-  follow_id: number;
+  live_id: string;
+  follow_id: string | number;
+  follow_id_str?: string;
   name: string;
   cover: string;
   sub_title: string;
@@ -697,7 +728,8 @@ export interface LiveDetail {
 // ─── Follow Topic Live Types ─────────────────────────────────────────────────
 
 export interface FollowTopicLiveResp {
-  follow_id: number;
+  follow_id: string | number;
+  follow_id_str?: string;
   url: string;
   platform: string;
   type: string;
@@ -727,6 +759,16 @@ export interface UpdateNoteReq {
   title?: string;
   content?: string;
   tags?: string[];
+}
+
+interface APIErrorBody {
+  code: number;
+  message: string;
+  reason: string;
+  retryable?: boolean;
+  field?: string;
+  constraint?: string;
+  expected_type?: string;
 }
 
 export interface UpdateNoteResp {
