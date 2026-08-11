@@ -56,6 +56,8 @@ Exposes the following tools to AI models:
 
 ## Installation
 
+需要 Node.js 20 或更高版本。
+
 ```bash
 # 直接运行（推荐，无需克隆）
 npx @getnote/mcp
@@ -66,13 +68,9 @@ npm install -g @getnote/mcp
 
 ## Usage
 
-### 授权登录（推荐）
+### 配置授权
 
-首次使用时，在 AI 对话里说「请帮我授权 得到大脑（Get笔记）」，AI 会自动引导 OAuth 登录，无需手动配置。
-
-### 手动配置 API Key（备选）
-
-获取 API Key 和 Client ID：**https://www.biji.com/openapi**
+当前本地 MCP 通过 OpenAPI API Key 和 Client ID 鉴权。先在 **https://www.biji.com/openapi** 创建或选择应用，完成账号授权并生成 API Key，再把两项凭证配置给 MCP 客户端。不要把凭证写进会提交到仓库的配置文件。
 
 ### Environment variable
 
@@ -164,12 +162,12 @@ Input: { "mime_type": "png" }
 
 ```bash
 curl -X POST "${host}" \
+  -F "key=${object_key}" \
   -F "OSSAccessKeyId=${accessid}" \
   -F "policy=${policy}" \
-  -F "Signature=${signature}" \
-  -F "key=${object_key}" \
+  -F "signature=${signature}" \
   -F "callback=${callback}" \
-  -F "success_action_status=200" \
+  -F "Content-Type=${oss_content_type}" \
   -F "file=@/path/to/image.png;type=${oss_content_type}"
 ```
 
@@ -186,7 +184,7 @@ Input: {
 }
 ```
 
-> **简化流程**：也可以直接使用 `upload_image` 工具，它会自动完成步骤 1 和 2，返回 `image_url`。
+> **推荐流程**：直接使用 `upload_image` 工具，它会自动完成步骤 1 和 2 并返回 `image_url`。`image_path` 仅接受相对路径；也可以传 `image_base64`，避免 MCP 读取超出工作目录的本地文件。
 
 ## API
 
