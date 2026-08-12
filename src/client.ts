@@ -485,6 +485,10 @@ export interface NoteDetail extends NoteItem {
     moments: { start_ms: number; end_ms: number; text: string }[];
     resources: { type: string; url: string; action_time: number }[];
   };
+  meeting_todos?: {
+    source: "summary_markdown_rules";
+    items: { text: string; completed: boolean }[];
+  };
   share_id?: string;
   version?: number;
 }

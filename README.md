@@ -36,6 +36,7 @@ Exposes the following tools to AI models:
 | `get_note_attachments` | 直接列出图片、音频和文件附件 |
 | `get_note_timeline` | 直接读取录音或会议时间线及原文资源 |
 | `get_note_quick_note` | 直接读取录音快捷笔记 |
+| `get_note_todos` | 读取会议总结中明确待办章节规则解析出的待办；不让模型自由猜测 |
 | `save_note` | 新建笔记（纯文本/链接/图片，见下方类型说明） |
 | `update_note` | 更新笔记（标题/内容/标签，仅支持 plain_text 类型） |
 | `get_note_task_progress` | 查询创建笔记任务进度（链接/图片笔记） |

@@ -12,6 +12,7 @@ test("Skill 2.0 first-class tools stay registered", () => {
     "get_note_attachments",
     "get_note_timeline",
     "get_note_quick_note",
+    "get_note_todos",
     "list_topic_directories",
     "create_topic_directory",
     "update_topic_directory",
