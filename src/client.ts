@@ -295,13 +295,31 @@ export class GetNoteClient {
     );
   }
 
-  async batchAddNotesToTopic(body: { topic_id: string; note_ids: string[] }) {
+  async batchAddNotesToTopic(body: { topic_id: string; note_ids: string[]; directory_id?: string }) {
     return this.request<BatchAddNotesResp>(
       "POST",
       "/resource/knowledge/note/batch-add",
       undefined,
       body
     );
+  }
+
+  async listTopicDirectories(params: { topic_id: string; directory_id?: string }) {
+    return this.request<KnowledgeDirectoryListResp>(
+      "GET", "/resource/knowledge/directories", params
+    );
+  }
+
+  async createTopicDirectory(body: { topic_id: string; name: string; parent_id?: string }) {
+    return this.request<KnowledgeDirectory>("POST", "/resource/knowledge/directory/create", undefined, body);
+  }
+
+  async updateTopicDirectory(body: { topic_id: string; directory_id: string; name?: string; parent_id?: string }) {
+    return this.request<Record<string, unknown>>("POST", "/resource/knowledge/directory/update", undefined, body);
+  }
+
+  async deleteTopicDirectory(body: { topic_id: string; directory_id: string }) {
+    return this.request<Record<string, unknown>>("POST", "/resource/knowledge/directory/delete", undefined, body);
   }
 
   async removeNoteFromTopic(body: { topic_id: string; note_ids: string[] }) {
@@ -320,6 +338,13 @@ export class GetNoteClient {
       "GET",
       "/resource/knowledge/bloggers",
       { topic_id: params.topic_id, page: params.page }
+    );
+  }
+
+  async followTopicBlogger(params: { topic_id: string; link: string; platform?: string }) {
+    return this.request<Record<string, unknown>>(
+      "POST", "/resource/knowledge/blogger/follow", undefined,
+      { topic_id: params.topic_id, link: params.link, platform: params.platform ?? "douyin" }
     );
   }
 
@@ -453,6 +478,16 @@ export interface NoteDetail extends NoteItem {
     excerpt?: string;
     /** 链接原文（网页正文内容） */
     content?: string;
+  };
+  quick_note?: string;
+  timeline?: {
+    version: number;
+    moments: { start_ms: number; end_ms: number; text: string }[];
+    resources: { type: string; url: string; action_time: number }[];
+  };
+  meeting_todos?: {
+    source: "summary_markdown_rules";
+    items: { text: string; completed: boolean }[];
   };
   share_id?: string;
   version?: number;
@@ -626,6 +661,30 @@ export interface BatchAddNotesResp {
 export interface RemoveNoteResp {
   removed_count: number;
   failed_note_ids: string[];
+}
+
+export interface KnowledgeDirectory {
+  id: string;
+  topic_id: string;
+  parent_id: string;
+  name: string;
+  type: string;
+  resource_desc?: string;
+}
+
+export interface KnowledgeDirectoryListResp {
+  current_directory?: KnowledgeDirectory;
+  directories: KnowledgeDirectory[];
+  resources: Array<{
+    id: string;
+    directory_id: string;
+    note_id?: string;
+    name: string;
+    url?: string;
+    type: string;
+    status: string;
+  }>;
+  total: number;
 }
 
 export interface QuotaInfo {

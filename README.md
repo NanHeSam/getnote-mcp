@@ -19,6 +19,9 @@ MCP (Model Context Protocol) server for [得到大脑（Get笔记）](https://bi
 - 用户说「在 XX 知识库搜一下」→ `recall_knowledge`
 - 用户分享了一个链接，说「保存这个」→ `save_note`（链接笔记）
 - 用户说「给这个笔记加个标签」→ `add_note_tags`
+- 用户说「读这条链接笔记原文 / 读取会议转写」→ `get_note_original` / `get_note_transcript`
+- 用户说「把笔记放进知识库的某个文件夹」→ `list_topic_directories` + `batch_add_notes_to_topic`
+- 用户说「订阅这个抖音博主」→ `follow_topic_blogger`
 
 ## Features
 
@@ -28,6 +31,12 @@ Exposes the following tools to AI models:
 |------|-------------|
 | `list_notes` | 获取笔记列表（游标分页） |
 | `get_note` | 获取笔记详情（支持 `image_quality=original` 获取原图） |
+| `get_note_original` | 按笔记类型直接读取原文 |
+| `get_note_transcript` | 直接读取录音、会议或课堂转写 |
+| `get_note_attachments` | 直接列出图片、音频和文件附件 |
+| `get_note_timeline` | 直接读取录音或会议时间线及原文资源 |
+| `get_note_quick_note` | 直接读取录音快捷笔记 |
+| `get_note_todos` | 读取会议总结中明确待办章节规则解析出的待办；不让模型自由猜测 |
 | `save_note` | 新建笔记（纯文本/链接/图片，见下方类型说明） |
 | `update_note` | 更新笔记（标题/内容/标签，仅支持 plain_text 类型） |
 | `get_note_task_progress` | 查询创建笔记任务进度（链接/图片笔记） |
@@ -41,10 +50,15 @@ Exposes the following tools to AI models:
 | `list_topic_notes` | 获取知识库笔记列表 |
 | `batch_add_notes_to_topic` | 批量添加笔记到知识库 |
 | `remove_note_from_topic` | 从知识库移除笔记 |
+| `list_topic_directories` | 浏览知识库文件夹及资源 |
+| `create_topic_directory` | 创建知识库文件夹 |
+| `update_topic_directory` | 重命名或移动知识库文件夹 |
+| `delete_topic_directory` | 删除空知识库文件夹 |
 | `get_upload_config` | 获取图片上传配置 |
 | `get_upload_token` | 获取图片上传凭证（预签名 URL） |
 | `upload_image` | 完整图片上传（自动获取凭证 + 上传到 OSS）|
 | `list_topic_bloggers` | 获取知识库订阅的博主列表 |
+| `follow_topic_blogger` | 订阅抖音博主到知识库 |
 | `list_topic_blogger_contents` | 获取博主内容列表（摘要） |
 | `get_blogger_content_detail` | 获取博主内容详情（含原文） |
 | `list_topic_lives` | 获取知识库已完成直播列表 |
@@ -56,6 +70,8 @@ Exposes the following tools to AI models:
 
 ## Installation
 
+需要 Node.js 20 或更高版本。
+
 ```bash
 # 直接运行（推荐，无需克隆）
 npx @getnote/mcp
@@ -66,13 +82,9 @@ npm install -g @getnote/mcp
 
 ## Usage
 
-### 授权登录（推荐）
+### 配置授权
 
-首次使用时，在 AI 对话里说「请帮我授权 得到大脑（Get笔记）」，AI 会自动引导 OAuth 登录，无需手动配置。
-
-### 手动配置 API Key（备选）
-
-获取 API Key 和 Client ID：**https://www.biji.com/openapi**
+当前本地 MCP 通过 OpenAPI API Key 和 Client ID 鉴权。先在 **https://www.biji.com/openapi** 创建或选择应用，完成账号授权并生成 API Key，再把两项凭证配置给 MCP 客户端。不要把凭证写进会提交到仓库的配置文件。
 
 ### Environment variable
 
@@ -164,12 +176,12 @@ Input: { "mime_type": "png" }
 
 ```bash
 curl -X POST "${host}" \
+  -F "key=${object_key}" \
   -F "OSSAccessKeyId=${accessid}" \
   -F "policy=${policy}" \
-  -F "Signature=${signature}" \
-  -F "key=${object_key}" \
+  -F "signature=${signature}" \
   -F "callback=${callback}" \
-  -F "success_action_status=200" \
+  -F "Content-Type=${oss_content_type}" \
   -F "file=@/path/to/image.png;type=${oss_content_type}"
 ```
 
@@ -186,7 +198,7 @@ Input: {
 }
 ```
 
-> **简化流程**：也可以直接使用 `upload_image` 工具，它会自动完成步骤 1 和 2，返回 `image_url`。
+> **推荐流程**：直接使用 `upload_image` 工具，它会自动完成步骤 1 和 2 并返回 `image_url`。`image_path` 仅接受相对路径；也可以传 `image_base64`，避免 MCP 读取超出工作目录的本地文件。
 
 ## API
 
@@ -199,7 +211,8 @@ Get your API Key and Client ID at [得到大脑（Get笔记）开放平台](http
 
 - 所有雪花 ID 优先传十进制字符串。为兼容历史调用，工具仍接受 JavaScript 安全整数；超过 `Number.MAX_SAFE_INTEGER` 的数字会被拒绝，避免静默精度损失。
 - `save_note` 支持 `topic_id`、`parent_id`、`client_request_id`。重试同一创建请求时复用同一个 `client_request_id`。
-- `list_topics` 返回用户拥有的 `DEFAULT`、`BOOKSPACE`、`CUSTOMER` 三类知识库，可把目标 `topic_id` 直接传给 `save_note`。
+- `list_topics` 返回用户拥有或加入的 `DEFAULT`、`BOOKSPACE`、`CUSTOMER`、`TEAMSPACE` 四类知识库，可把目标 `topic_id` 直接传给 `save_note`。
+- 知识库支持文件夹浏览和管理；`batch_add_notes_to_topic` 可传 `directory_id`，把笔记直接加入目标文件夹。
 - 即使 HTTP 为 200，`success:false` 仍按失败处理；错误结果保留 `code/reason/retryable/field/constraint/expected_type/request_id`。
 - `GETNOTE_API_URL` 可传站点根地址、`/open` 或完整 `/open/api/v1`；未设置时仍使用生产地址。
 

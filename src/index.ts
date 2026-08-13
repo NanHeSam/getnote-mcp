@@ -167,6 +167,36 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "get_note_original",
+    description: "直接读取笔记原文。链接笔记返回网页原文，录音笔记返回转写原文，文字笔记返回正文；不要把 AI 摘要冒充原文。",
+    inputSchema: { type: "object" as const, properties: { id: { type: ["string", "number"], description: "笔记 ID，推荐十进制字符串" } }, required: ["id"] },
+  },
+  {
+    name: "get_note_transcript",
+    description: "直接读取录音、会议或课堂笔记的转写原文；没有转写时明确返回不可用。",
+    inputSchema: { type: "object" as const, properties: { id: { type: ["string", "number"], description: "笔记 ID，推荐十进制字符串" } }, required: ["id"] },
+  },
+  {
+    name: "get_note_attachments",
+    description: "直接列出笔记中的图片、音频和文件附件，不需要从完整详情中猜字段。",
+    inputSchema: { type: "object" as const, properties: { id: { type: ["string", "number"], description: "笔记 ID，推荐十进制字符串" } }, required: ["id"] },
+  },
+  {
+    name: "get_note_timeline",
+    description: "直接读取录音或会议笔记的结构化时间线和原文资源；没有时间线时明确返回不可用。",
+    inputSchema: { type: "object" as const, properties: { id: { type: ["string", "number"], description: "笔记 ID，推荐十进制字符串" } }, required: ["id"] },
+  },
+  {
+    name: "get_note_quick_note",
+    description: "直接读取录音笔记的快捷笔记；没有快捷笔记时明确返回不可用。",
+    inputSchema: { type: "object" as const, properties: { id: { type: ["string", "number"], description: "笔记 ID，推荐十进制字符串" } }, required: ["id"] },
+  },
+  {
+    name: "get_note_todos",
+    description: "读取从会议总结中明确的待办章节按规则解析出的条目。返回 source 和 items；空列表表示未识别到明确待办章节，不应让模型自由补写。",
+    inputSchema: { type: "object" as const, properties: { id: { type: ["string", "number"], description: "笔记 ID，推荐十进制字符串" } }, required: ["id"] },
+  },
+  {
     name: "save_note",
     description:
       "新建笔记（⚠️ 仅支持新建，不支持编辑已有笔记）。支持纯文本笔记（plain_text）、链接笔记（link）和图片笔记（img_text）。\n\n🔗 **笔记内链**：Get笔记正文支持链接到其他笔记，格式为 `https://biji.com/note/{note_id}`。如需在笔记正文中引用其他笔记，按此格式填写 content 中的链接。若当前笔记后续会被分享出去，则应优先调用 `share_note` 工具获取被引用笔记的分享链接，并以分享链接替代内链写入正文。\n\n**图片笔记流程**：先用 upload_image 上传图片获取 image_url，再调用此接口传入 image_urls。\n\n**返回值说明**：\n- `plain_text`：同步返回 `id`、`title`、`created_at`、`updated_at`。\n- `link`（分享链接：`biji.com/note/share_note/*` 或 `d.biji.com/*` 短链）：同步返回 `id`、`title`、`created_at`、`updated_at`，**无需轮询**。\n- `link`（普通链接）：返回 `tasks` 数组（每项含 `task_id` 和 `url`），需用 `get_note_task_progress` 轮询进度。",
@@ -198,7 +228,7 @@ const TOOLS: Tool[] = [
         },
         topic_id: {
           type: "string",
-          description: "目标知识库 ID（来自 list_topics 的 topic_id；支持 DEFAULT、BOOKSPACE、CUSTOMER）",
+          description: "目标知识库 ID（来自 list_topics；支持 DEFAULT、BOOKSPACE、CUSTOMER、TEAMSPACE）",
         },
         client_request_id: {
           type: "string",
@@ -317,7 +347,7 @@ const TOOLS: Tool[] = [
   // ── Knowledge / Topics ──
   {
     name: "list_topics",
-    description: "获取用户自己创建或拥有的知识库列表（每页固定 20 条），包含普通知识库（DEFAULT）、客户档案（CUSTOMER）和书籍知识库（BOOKSPACE）。返回 topics[]、has_more、total；保存笔记前可先按 name/scope 选择目标 topic_id。",
+    description: "获取用户创建、拥有或加入的知识库列表，包含普通、书籍、客户档案和团队知识库（TEAMSPACE）。返回 topics[]、has_more、total；保存前可按 name/scope 选择 topic_id。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -386,9 +416,43 @@ const TOOLS: Tool[] = [
           items: { type: "string" },
           description: "笔记 ID 列表（字符串格式，最多 20 个）",
         },
+        directory_id: {
+          type: "string",
+          description: "目标目录 ID；不传则加入知识库根目录",
+        },
       },
       required: ["topic_id", "note_ids"],
     },
+  },
+  {
+    name: "list_topic_directories",
+    description: "浏览知识库文件夹结构及当前目录下的笔记等资源。支持个人、书籍、客户档案和团队知识库。",
+    inputSchema: { type: "object" as const, properties: {
+      topic_id: { type: "string", description: "知识库 ID" },
+      directory_id: { type: "string", description: "目录 ID；不传表示根目录" },
+    }, required: ["topic_id"] },
+  },
+  {
+    name: "create_topic_directory",
+    description: "在知识库中创建文件夹。",
+    inputSchema: { type: "object" as const, properties: {
+      topic_id: { type: "string", description: "知识库 ID" }, name: { type: "string", description: "文件夹名称" },
+      parent_id: { type: "string", description: "父目录 ID；不传表示根目录" },
+    }, required: ["topic_id", "name"] },
+  },
+  {
+    name: "update_topic_directory",
+    description: "重命名或移动知识库文件夹。未提供的字段保持不变。",
+    inputSchema: { type: "object" as const, properties: {
+      topic_id: { type: "string" }, directory_id: { type: "string" }, name: { type: "string" }, parent_id: { type: "string" },
+    }, required: ["topic_id", "directory_id"] },
+  },
+  {
+    name: "delete_topic_directory",
+    description: "删除空的知识库文件夹。属于破坏性操作，调用前必须取得用户确认。",
+    inputSchema: { type: "object" as const, properties: {
+      topic_id: { type: "string" }, directory_id: { type: "string" },
+    }, required: ["topic_id", "directory_id"] },
   },
   {
     name: "remove_note_from_topic",
@@ -487,6 +551,14 @@ const TOOLS: Tool[] = [
       },
       required: ["topic_id"],
     },
+  },
+  {
+    name: "follow_topic_blogger",
+    description: "把抖音博主订阅到指定知识库，后续可读取该博主内容。",
+    inputSchema: { type: "object" as const, properties: {
+      topic_id: { type: "string", description: "知识库 ID" }, link: { type: "string", description: "抖音博主主页或分享链接" },
+      platform: { type: "string", enum: ["douyin"], default: "douyin" },
+    }, required: ["topic_id", "link"] },
   },
   {
     name: "list_topic_blogger_contents",
@@ -706,6 +778,41 @@ async function handleTool(
     case "get_note": {
       return client.getNote(snowflakeID(input.id, "id"), input.image_quality as string | undefined);
     }
+    case "get_note_original": {
+      const result = await client.getNote(snowflakeID(input.id, "id"));
+      const note = result.note;
+      const original = note.web_page?.content || note.audio?.original || note.content;
+      if (!original) throw new Error("Original content is not available for this note");
+      return { id: note.id, note_type: note.note_type, title: note.title, original };
+    }
+    case "get_note_transcript": {
+      const result = await client.getNote(snowflakeID(input.id, "id"));
+      const transcript = result.note.audio?.original;
+      if (!transcript) throw new Error("Audio transcript is not available for this note");
+      return { id: result.note.id, title: result.note.title, transcript };
+    }
+    case "get_note_attachments": {
+      const result = await client.getNote(snowflakeID(input.id, "id"), "original");
+      return { id: result.note.id, title: result.note.title, attachments: result.note.attachments || [] };
+    }
+    case "get_note_timeline": {
+      const result = await client.getNote(snowflakeID(input.id, "id"));
+      if (!result.note.timeline) throw new Error("Timeline is not available for this note");
+      return { id: result.note.id, title: result.note.title, timeline: result.note.timeline };
+    }
+    case "get_note_quick_note": {
+      const result = await client.getNote(snowflakeID(input.id, "id"));
+      if (!result.note.quick_note) throw new Error("Quick note is not available for this note");
+      return { id: result.note.id, title: result.note.title, quick_note: result.note.quick_note };
+    }
+    case "get_note_todos": {
+      const result = await client.getNote(snowflakeID(input.id, "id"));
+      return {
+        id: result.note.id,
+        title: result.note.title,
+        meeting_todos: result.note.meeting_todos || { source: "summary_markdown_rules", items: [] },
+      };
+    }
     case "save_note": {
       const body: SaveNoteReq = {};
       if (input.title !== undefined) body.title = input.title as string;
@@ -775,8 +882,21 @@ async function handleTool(
     case "batch_add_notes_to_topic": {
       return client.batchAddNotesToTopic({
         topic_id: input.topic_id as string,
+        directory_id: input.directory_id as string | undefined,
         note_ids: (input.note_ids as unknown[]).map((id) => String(snowflakeID(id, "note_ids[]"))),
       });
+    }
+    case "list_topic_directories": {
+      return client.listTopicDirectories({ topic_id: input.topic_id as string, directory_id: input.directory_id as string | undefined });
+    }
+    case "create_topic_directory": {
+      return client.createTopicDirectory({ topic_id: input.topic_id as string, name: input.name as string, parent_id: input.parent_id as string | undefined });
+    }
+    case "update_topic_directory": {
+      return client.updateTopicDirectory({ topic_id: input.topic_id as string, directory_id: input.directory_id as string, name: input.name as string | undefined, parent_id: input.parent_id as string | undefined });
+    }
+    case "delete_topic_directory": {
+      return client.deleteTopicDirectory({ topic_id: input.topic_id as string, directory_id: input.directory_id as string });
     }
     case "remove_note_from_topic": {
       return client.removeNoteFromTopic({
@@ -826,6 +946,9 @@ async function handleTool(
         topic_id: input.topic_id as string,
         page: input.page as number | undefined,
       });
+    }
+    case "follow_topic_blogger": {
+      return client.followTopicBlogger({ topic_id: input.topic_id as string, link: input.link as string, platform: input.platform as string | undefined });
     }
     case "list_topic_blogger_contents": {
       return client.listTopicBloggerContents({
