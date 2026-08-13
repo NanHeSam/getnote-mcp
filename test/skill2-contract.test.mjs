@@ -35,3 +35,8 @@ test("Knowledge directory and blogger tools use the public OpenAPI routes", () =
     assert.ok(clientSource.includes(route), `${route} must remain in the client contract`);
   }
 });
+
+test("AI team knowledge bases remain part of the public tool contract", () => {
+  assert.match(indexSource, /AITEAMSPACE/, "AITEAMSPACE must be documented by list/save tools");
+  assert.match(indexSource, /note\.content\.trash/, "delegate-capable note deletion scope must remain explicit");
+});
