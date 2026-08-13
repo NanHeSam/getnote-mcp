@@ -228,7 +228,7 @@ const TOOLS: Tool[] = [
         },
         topic_id: {
           type: "string",
-          description: "目标知识库 ID（来自 list_topics；支持 DEFAULT、BOOKSPACE、CUSTOMER、TEAMSPACE、AITEAMSPACE）",
+          description: "目标知识库 ID（来自 list_topics；支持 DEFAULT、BOOKSPACE、CUSTOMER、TEAMSPACE）",
         },
         client_request_id: {
           type: "string",
@@ -347,7 +347,7 @@ const TOOLS: Tool[] = [
   // ── Knowledge / Topics ──
   {
     name: "list_topics",
-    description: "获取用户创建、拥有或加入的知识库列表，包含普通、书籍、客户档案、普通团队知识库（TEAMSPACE）和 AI 团队知识库（AITEAMSPACE）。返回 topics[]、has_more、total；保存前可按 name/scope 选择 topic_id。",
+    description: "获取用户创建、拥有或加入的知识库列表，包含普通、书籍、客户档案和团队知识库（TEAMSPACE）。返回 topics[]、has_more、total；保存前可按 name/scope 选择 topic_id。",
     inputSchema: {
       type: "object" as const,
       properties: {
