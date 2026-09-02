@@ -68,6 +68,28 @@ test("HTTP 200 success=false exposes the complete structured error", async () =>
   }
 });
 
+test("knowledge list methods default to DEFAULT and forward explicit scope", async () => {
+  const requests = [];
+  const server = http.createServer((req, res) => {
+    requests.push(req.url);
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ success: true, data: { topics: [], has_more: false, total: 0 } }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const baseURL = `http://127.0.0.1:${address.port}`;
+
+  try {
+    const client = new GetNoteClient("key", "client", baseURL);
+    await client.listTopics({ page: 1 });
+    await client.listSubscribeTopics({ page: 2, scope: "BOOKSPACE" });
+    assert.equal(requests[0], "/open/api/v1/resource/knowledge/list?page=1&scope=DEFAULT");
+    assert.equal(requests[1], "/open/api/v1/resource/knowledge/subscribe/list?page=2&scope=BOOKSPACE");
+  } finally {
+    server.close();
+  }
+});
+
 test("OSS multipart fields use the signed names and order", async () => {
   let body = "";
   const server = http.createServer((req, res) => {

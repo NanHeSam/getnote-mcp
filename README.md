@@ -45,7 +45,7 @@ Exposes the following tools to AI models:
 | `delete_note_tag` | 删除笔记标签 |
 | `recall` | 全局语义搜索（在所有笔记中搜索） |
 | `recall_knowledge` | 知识库语义搜索（在指定知识库中搜索） |
-| `list_topics` | 获取知识库列表 |
+| `list_topics` | 获取知识库列表，默认 DEFAULT，可指定 scope |
 | `create_topic` | 创建知识库 |
 | `list_topic_notes` | 获取知识库笔记列表 |
 | `batch_add_notes_to_topic` | 批量添加笔记到知识库 |
@@ -66,7 +66,7 @@ Exposes the following tools to AI models:
 | `get_quota` | 查询 API 调用配额 |
 | `share_note` | 生成笔记分享链接 |
 | `follow_topic_live` | 在知识库里订阅得到直播 |
-| `list_subscribe_topics` | 获取我订阅的知识库列表 |
+| `list_subscribe_topics` | 获取真实订阅的他人知识库，默认 DEFAULT，可指定 scope |
 
 ## Installation
 
@@ -211,7 +211,7 @@ Get your API Key and Client ID at [得到大脑（Get笔记）开放平台](http
 
 - 所有雪花 ID 优先传十进制字符串。为兼容历史调用，工具仍接受 JavaScript 安全整数；超过 `Number.MAX_SAFE_INTEGER` 的数字会被拒绝，避免静默精度损失。
 - `save_note` 支持 `topic_id`、`parent_id`、`client_request_id`。重试同一创建请求时复用同一个 `client_request_id`。
-- `list_topics` 返回用户拥有或加入的 `DEFAULT`、`BOOKSPACE`、`CUSTOMER`、`TEAMSPACE` 四类知识库，可把目标 `topic_id` 直接传给 `save_note`。
+- `list_topics` 和 `list_subscribe_topics` 默认只返回 `DEFAULT`；需要书籍、客户档案或团队知识库时，显式传 `BOOKSPACE`、`CUSTOMER` 或 `TEAMSPACE`。订阅列表不包含自己创建的知识库。
 - 知识库支持文件夹浏览和管理；`batch_add_notes_to_topic` 可传 `directory_id`，把笔记直接加入目标文件夹。
 - 即使 HTTP 为 200，`success:false` 仍按失败处理；错误结果保留 `code/reason/retryable/field/constraint/expected_type/request_id`。
 - `GETNOTE_API_URL` 可传站点根地址、`/open` 或完整 `/open/api/v1`；未设置时仍使用生产地址。
