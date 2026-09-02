@@ -347,7 +347,7 @@ const TOOLS: Tool[] = [
   // ── Knowledge / Topics ──
   {
     name: "list_topics",
-    description: "获取用户创建、拥有或加入的知识库列表，包含普通、书籍、客户档案和团队知识库（TEAMSPACE）。返回 topics[]、has_more、total；保存前可按 name/scope 选择 topic_id。",
+    description: "获取用户创建、拥有或加入的知识库列表。默认只返回普通知识库（DEFAULT）；可用 scope 指定客户档案、书籍或团队知识库。返回 topics[]、has_more、total。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -355,6 +355,12 @@ const TOOLS: Tool[] = [
           type: "number",
           description: "页码，从 1 开始（默认 1）",
           default: 1,
+        },
+        scope: {
+          type: "string",
+          enum: ["DEFAULT", "CUSTOMER", "BOOKSPACE", "TEAMSPACE"],
+          description: "知识库类型，默认 DEFAULT",
+          default: "DEFAULT",
         },
       },
       required: [],
@@ -688,13 +694,19 @@ const TOOLS: Tool[] = [
   {
     name: "list_subscribe_topics",
     description:
-      "获取当前用户订阅的知识库列表（他人公开的，非自己创建）。返回 topics[]、has_more、total。",
+      "获取当前用户真实订阅的他人知识库列表，不包含自己创建的知识库。默认只返回 DEFAULT；可用 scope 指定其他类型。返回 topics[]、has_more、total。",
     inputSchema: {
       type: "object" as const,
       properties: {
         page: {
           type: "number",
           description: "页码，从 1 开始，默认 1",
+        },
+        scope: {
+          type: "string",
+          enum: ["DEFAULT", "CUSTOMER", "BOOKSPACE", "TEAMSPACE"],
+          description: "知识库类型，默认 DEFAULT",
+          default: "DEFAULT",
         },
       },
       required: [],
@@ -864,6 +876,7 @@ async function handleTool(
     case "list_topics": {
       return client.listTopics({
         page: input.page as number | undefined,
+        scope: input.scope as "DEFAULT" | "CUSTOMER" | "BOOKSPACE" | "TEAMSPACE" | undefined,
       });
     }
     case "create_topic": {
@@ -997,6 +1010,7 @@ async function handleTool(
     case "list_subscribe_topics": {
       return client.listSubscribeTopics({
         page: input.page as number | undefined,
+        scope: input.scope as "DEFAULT" | "CUSTOMER" | "BOOKSPACE" | "TEAMSPACE" | undefined,
       });
     }
 

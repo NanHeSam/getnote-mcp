@@ -271,10 +271,10 @@ export class GetNoteClient {
 
   // ─── Knowledge / Topics ─────────────────────────────────────────────────
 
-  async listTopics(params?: { page?: number; size?: number }) {
+  async listTopics(params?: { page?: number; scope?: KnowledgeScope }) {
     return this.request<ListTopicsResp>("GET", "/resource/knowledge/list", {
       page: params?.page,
-      size: params?.size,
+      scope: params?.scope ?? "DEFAULT",
     });
   }
 
@@ -404,11 +404,11 @@ export class GetNoteClient {
     );
   }
 
-  async listSubscribeTopics(params: { page?: number }) {
+  async listSubscribeTopics(params: { page?: number; scope?: KnowledgeScope }) {
     return this.request<ListSubscribeTopicsResp>(
       "GET",
       "/resource/knowledge/subscribe/list",
-      { page: params.page }
+      { page: params.page, scope: params.scope ?? "DEFAULT" }
     );
   }
 
@@ -609,6 +609,8 @@ export interface KnowledgeTopicStats {
   blogger_count: number;
   live_count: number;
 }
+
+export type KnowledgeScope = "DEFAULT" | "CUSTOMER" | "BOOKSPACE" | "TEAMSPACE";
 
 export interface KnowledgeTopic {
   id: string;
