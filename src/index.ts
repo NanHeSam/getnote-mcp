@@ -39,10 +39,9 @@ const SERVER_VERSION: string = pkg.version;
  *  - 拒绝 null byte：底层 syscall 会在 \0 处截断字符串，可绕过后续校验。
  *  - 拒绝绝对路径（以 / 或 \ 开头，或平台判定为绝对路径）。
  *  - 拒绝包含 ".." 的路径段：避免跳出工作目录 / 允许目录。
- *  - 若设置了 GETNOTE_MCP_ALLOWED_ROOT：用 realpathSync + resolve 解开符号链接
- *    后，确保最终真实路径严格位于该目录内（防止软链逃逸）。
- *  - 若未设置：默认只允许相对路径（上面已拒绝绝对路径与 ".."），相对当前
- *    工作目录读取。
+ *  - 用 realpathSync + resolve 解开符号链接，确保最终真实路径严格位于允许
+ *    目录内（防止软链逃逸）。未设置 GETNOTE_MCP_ALLOWED_ROOT 时，默认使用
+ *    当前工作目录作为允许目录。
  *
  * @returns 经校验、可安全读取的最终路径。
  */
@@ -65,21 +64,13 @@ function resolveSafeImagePath(imagePath: string): string {
     throw new Error('image_path must not contain ".." path segments');
   }
 
-  const allowedRoot = process.env.GETNOTE_MCP_ALLOWED_ROOT;
-  if (allowedRoot) {
-    // realpathSync 解开符号链接，防止用软链把路径指向允许目录之外的文件
-    const rootReal = realpathSync(resolve(allowedRoot));
-    const target = realpathSync(resolve(rootReal, imagePath));
-    if (target !== rootReal && !target.startsWith(rootReal + sep)) {
-      throw new Error(
-        "image_path resolves outside of GETNOTE_MCP_ALLOWED_ROOT"
-      );
-    }
-    return target;
+  const allowedRoot = process.env.GETNOTE_MCP_ALLOWED_ROOT || process.cwd();
+  const rootReal = realpathSync(resolve(allowedRoot));
+  const target = realpathSync(resolve(rootReal, imagePath));
+  if (target !== rootReal && !target.startsWith(rootReal + sep)) {
+    throw new Error("image_path resolves outside of the allowed root");
   }
-
-  // 未配置允许目录：仅允许相对路径（已校验），相对 cwd 解析
-  return resolve(process.cwd(), imagePath);
+  return target;
 }
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -522,7 +513,7 @@ const TOOLS: Tool[] = [
         image_path: {
           type: "string",
           description:
-            "本地图片文件路径。出于安全考虑仅接受相对路径：不允许绝对路径（以 / 或 \\ 开头）、不允许包含 \"..\" 的路径段、不允许 null byte。默认相对当前工作目录解析；若设置了环境变量 GETNOTE_MCP_ALLOWED_ROOT，则路径必须落在该目录内（含符号链接解析后）。",
+            "本地图片文件路径。出于安全考虑仅接受相对路径：不允许绝对路径（以 / 或 \\ 开头）、不允许包含 \"..\" 的路径段、不允许 null byte。默认限制在当前工作目录内；若设置了环境变量 GETNOTE_MCP_ALLOWED_ROOT，则限制在指定目录内。符号链接解析后也不得离开该目录。",
         },
         image_base64: {
           type: "string",
