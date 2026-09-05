@@ -82,6 +82,33 @@ npm install -g @getnote/mcp
 
 ## Usage
 
+### Deploy a private remote MCP on Vercel
+
+This fork includes a stateless Streamable HTTP endpoint at `/api/mcp`.
+
+Set these encrypted environment variables in Vercel for Production, Preview,
+and Development:
+
+```text
+GETNOTE_API_KEY=gk_live_xxx
+GETNOTE_CLIENT_ID=cli_xxx
+MCP_ACCESS_TOKEN=<a-long-random-secret>
+```
+
+Deploy the repository, then configure an MCP client with:
+
+```json
+{
+  "url": "https://your-project.vercel.app/api/mcp",
+  "headers": {
+    "Authorization": "Bearer <MCP_ACCESS_TOKEN>"
+  }
+}
+```
+
+The endpoint is stateless so it works across Vercel serverless invocations.
+Never commit any of the three secrets above.
+
 ### 配置授权
 
 当前本地 MCP 通过 OpenAPI API Key 和 Client ID 鉴权。先在 **https://www.biji.com/openapi** 创建或选择应用，完成账号授权并生成 API Key，再把两项凭证配置给 MCP 客户端。不要把凭证写进会提交到仓库的配置文件。

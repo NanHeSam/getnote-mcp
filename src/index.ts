@@ -85,10 +85,9 @@ function getApiKey(): string {
   const envKey = process.env.GETNOTE_API_KEY;
   if (envKey) return envKey;
 
-  console.error(
-    "Error: API key required. Set GETNOTE_API_KEY env var or pass --api-key <key>"
+  throw new Error(
+    "API key required. Set GETNOTE_API_KEY env var or pass --api-key <key>"
   );
-  process.exit(1);
 }
 
 function getClientId(): string {
@@ -101,10 +100,9 @@ function getClientId(): string {
   const envKey = process.env.GETNOTE_CLIENT_ID;
   if (envKey) return envKey;
 
-  console.error(
-    "Error: Client ID required. Set GETNOTE_CLIENT_ID env var or pass --client-id <id>"
+  throw new Error(
+    "Client ID required. Set GETNOTE_CLIENT_ID env var or pass --client-id <id>"
   );
-  process.exit(1);
 }
 
 function snowflakeID(value: unknown, field: string): string | number {
@@ -1032,7 +1030,7 @@ async function handleTool(
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-async function main() {
+export function createGetNoteServer() {
   const apiKey = getApiKey();
   const clientId = getClientId();
   const client = new GetNoteClient(apiKey, clientId);
@@ -1107,12 +1105,20 @@ async function main() {
     }
   });
 
+  return server;
+}
+
+async function main() {
+  const server = createGetNoteServer();
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("getnote-mcp server started");
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}
